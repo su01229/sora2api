@@ -741,8 +741,13 @@ class Database:
                 """, (today, token_id))
             await db.commit()
     
-    async def increment_error_count(self, token_id: int):
-        """Increment error count (both total and consecutive)"""
+    async def increment_error_count(self, token_id: int, increment_consecutive: bool = True):
+        """Increment error count
+
+        Args:
+            token_id: Token ID
+            increment_consecutive: Whether to increment consecutive error count (False for overload errors)
+        """
         from datetime import date
         async with aiosqlite.connect(self.db_path) as db:
             today = str(date.today())
@@ -752,26 +757,46 @@ class Database:
 
             # If date changed, reset today's error count
             if row and row[0] != today:
-                await db.execute("""
-                    UPDATE token_stats
-                    SET error_count = error_count + 1,
-                        consecutive_error_count = consecutive_error_count + 1,
-                        today_error_count = 1,
-                        today_date = ?,
-                        last_error_at = CURRENT_TIMESTAMP
-                    WHERE token_id = ?
-                """, (today, token_id))
+                if increment_consecutive:
+                    await db.execute("""
+                        UPDATE token_stats
+                        SET error_count = error_count + 1,
+                            consecutive_error_count = consecutive_error_count + 1,
+                            today_error_count = 1,
+                            today_date = ?,
+                            last_error_at = CURRENT_TIMESTAMP
+                        WHERE token_id = ?
+                    """, (today, token_id))
+                else:
+                    await db.execute("""
+                        UPDATE token_stats
+                        SET error_count = error_count + 1,
+                            today_error_count = 1,
+                            today_date = ?,
+                            last_error_at = CURRENT_TIMESTAMP
+                        WHERE token_id = ?
+                    """, (today, token_id))
             else:
-                # Same day, just increment all counters
-                await db.execute("""
-                    UPDATE token_stats
-                    SET error_count = error_count + 1,
-                        consecutive_error_count = consecutive_error_count + 1,
-                        today_error_count = today_error_count + 1,
-                        today_date = ?,
-                        last_error_at = CURRENT_TIMESTAMP
-                    WHERE token_id = ?
-                """, (today, token_id))
+                # Same day, just increment counters
+                if increment_consecutive:
+                    await db.execute("""
+                        UPDATE token_stats
+                        SET error_count = error_count + 1,
+                            consecutive_error_count = consecutive_error_count + 1,
+                            today_error_count = today_error_count + 1,
+                            today_date = ?,
+                            last_error_at = CURRENT_TIMESTAMP
+                        WHERE token_id = ?
+                    """, (today, token_id))
+                else:
+                    await db.execute("""
+                        UPDATE token_stats
+                        SET error_count = error_count + 1,
+                            today_error_count = today_error_count + 1,
+                            today_date = ?,
+                            last_error_at = CURRENT_TIMESTAMP
+                        WHERE token_id = ?
+                    """, (today, token_id))
             await db.commit()
     
     async def reset_error_count(self, token_id: int):
@@ -848,7 +873,13 @@ class Database:
             """, (limit,))
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
-    
+
+    async def clear_all_logs(self):
+        """Clear all request logs"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM request_logs")
+            await db.commit()
+
     # Admin config operations
     async def get_admin_config(self) -> AdminConfig:
         """Get admin configuration"""

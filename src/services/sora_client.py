@@ -291,7 +291,7 @@ class SoraClient:
         Returns:
             List of pending tasks with progress information
         """
-        result = await self._make_request("GET", "/nf/pending", token)
+        result = await self._make_request("GET", "/nf/pending/v2", token)
         # The API returns a list directly
         return result if isinstance(result, list) else []
 

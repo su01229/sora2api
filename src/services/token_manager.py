@@ -982,16 +982,22 @@ class TokenManager:
         else:
             await self.db.increment_image_count(token_id)
     
-    async def record_error(self, token_id: int):
-        """Record token error"""
-        await self.db.increment_error_count(token_id)
+    async def record_error(self, token_id: int, is_overload: bool = False):
+        """Record token error
 
-        # Check if should ban
-        stats = await self.db.get_token_stats(token_id)
-        admin_config = await self.db.get_admin_config()
+        Args:
+            token_id: Token ID
+            is_overload: Whether this is an overload error (heavy_load). If True, only increment total error count.
+        """
+        await self.db.increment_error_count(token_id, increment_consecutive=not is_overload)
 
-        if stats and stats.consecutive_error_count >= admin_config.error_ban_threshold:
-            await self.db.update_token_status(token_id, False)
+        # Check if should ban (only if not overload error)
+        if not is_overload:
+            stats = await self.db.get_token_stats(token_id)
+            admin_config = await self.db.get_admin_config()
+
+            if stats and stats.consecutive_error_count >= admin_config.error_ban_threshold:
+                await self.db.update_token_status(token_id, False)
     
     async def record_success(self, token_id: int, is_video: bool = False):
         """Record successful request (reset error count)"""

@@ -404,13 +404,31 @@ class GenerationHandler:
             if is_video and self.concurrency_manager:
                 await self.concurrency_manager.release_video(token_obj.id)
 
-            # Log successful request
+            # Log successful request with complete task info
             duration = time.time() - start_time
+
+            # Get complete task info from database
+            task_info = await self.db.get_task(task_id)
+            response_data = {
+                "task_id": task_id,
+                "status": "success",
+                "prompt": prompt,
+                "model": model
+            }
+
+            # Add result_urls if available
+            if task_info and task_info.result_urls:
+                try:
+                    result_urls = json.loads(task_info.result_urls)
+                    response_data["result_urls"] = result_urls
+                except:
+                    response_data["result_urls"] = task_info.result_urls
+
             await self._log_request(
                 token_obj.id,
                 f"generate_{model_config['type']}",
                 {"model": model, "prompt": prompt, "has_image": image is not None},
-                {"task_id": task_id, "status": "success"},
+                response_data,
                 200,
                 duration
             )
@@ -427,9 +445,11 @@ class GenerationHandler:
             if is_video and token_obj and self.concurrency_manager:
                 await self.concurrency_manager.release_video(token_obj.id)
 
-            # Record error
+            # Record error (check if it's an overload error)
             if token_obj:
-                await self.token_manager.record_error(token_obj.id)
+                error_str = str(e).lower()
+                is_overload = "heavy_load" in error_str or "under heavy load" in error_str
+                await self.token_manager.record_error(token_obj.id, is_overload=is_overload)
 
             # Log failed request
             duration = time.time() - start_time
@@ -1254,9 +1274,11 @@ class GenerationHandler:
             await self.token_manager.record_success(token_obj.id, is_video=True)
 
         except Exception as e:
-            # Record error
+            # Record error (check if it's an overload error)
             if token_obj:
-                await self.token_manager.record_error(token_obj.id)
+                error_str = str(e).lower()
+                is_overload = "heavy_load" in error_str or "under heavy load" in error_str
+                await self.token_manager.record_error(token_obj.id, is_overload=is_overload)
             debug_logger.log_error(
                 error_message=f"Character and video generation failed: {str(e)}",
                 status_code=500,
@@ -1341,9 +1363,11 @@ class GenerationHandler:
             await self.token_manager.record_success(token_obj.id, is_video=True)
 
         except Exception as e:
-            # Record error
+            # Record error (check if it's an overload error)
             if token_obj:
-                await self.token_manager.record_error(token_obj.id)
+                error_str = str(e).lower()
+                is_overload = "heavy_load" in error_str or "under heavy load" in error_str
+                await self.token_manager.record_error(token_obj.id, is_overload=is_overload)
             debug_logger.log_error(
                 error_message=f"Remix generation failed: {str(e)}",
                 status_code=500,

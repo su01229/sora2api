@@ -701,8 +701,19 @@ async def get_logs(limit: int = 100, token: str = Depends(verify_admin_token)):
         "operation": log.get("operation"),
         "status_code": log.get("status_code"),
         "duration": log.get("duration"),
-        "created_at": log.get("created_at")
+        "created_at": log.get("created_at"),
+        "request_body": log.get("request_body"),
+        "response_body": log.get("response_body")
     } for log in logs]
+
+@router.delete("/api/logs")
+async def clear_logs(token: str = Depends(verify_admin_token)):
+    """Clear all logs"""
+    try:
+        await db.clear_all_logs()
+        return {"success": True, "message": "所有日志已清空"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Cache config endpoints
 @router.post("/api/cache/config")
